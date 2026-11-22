@@ -2,15 +2,20 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   background-color: #09090b;
   color: #f5f5f7;
   overflow: hidden;
   user-select: none;
+}
+
+button,
+input {
+  font: inherit;
 }
 
 .app-container {
@@ -26,17 +31,18 @@ body {
               #09090b;
 }
 
-/* Barra lateral estilo macOS / Apple Music */
+/* Barra lateral estilo macOS / Apple Music.
+   Sin backdrop-filter: detrás solo hay un fondo estático, así que el blur
+   no se veía y obligaba a la GPU a recalcularlo en cada repintado. */
 .sidebar {
   grid-area: sidebar;
-  background: rgba(24, 24, 28, 0.65);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(22, 22, 26, 0.85);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
 }
 
 .logo {
@@ -69,7 +75,7 @@ body {
   cursor: pointer;
   font-weight: 500;
   font-size: 0.92rem;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .nav-item:hover {
@@ -83,12 +89,62 @@ body {
   font-weight: 600;
 }
 
-/* Barra superior unificada (Controles Apple Music) */
+/* Vista previa de la siguiente canción (abajo de la barra lateral) */
+.proxima-wrap {
+  margin-top: auto;
+}
+
+.proxima {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.proxima:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.proxima img {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.proxima-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.proxima-titulo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proxima-artista {
+  font-size: 0.72rem;
+  color: #98989d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Barra superior unificada (Controles Apple Music).
+   Es lo que más se repinta (cambia la miniatura y el título al elegir canción),
+   así que aquí el blur costaba más. */
 .topbar {
   grid-area: topbar;
-  background: rgba(18, 18, 22, 0.72);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
+  background: rgba(16, 16, 20, 0.9);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
@@ -119,6 +175,12 @@ body {
   transform: scale(1.1);
 }
 
+/* Botón activado (repetir) */
+.icon-btn.activo,
+.icon-btn.activo:hover {
+  color: #1db954;
+}
+
 .play-btn {
   background: #ffffff;
   color: #000000;
@@ -138,20 +200,28 @@ body {
   transform: scale(1.08);
 }
 
-/* Cápsula central Now Playing estilo Apple Music */
+/* Cápsula central Now Playing: fila principal + barra de progreso */
 .apple-pill {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  height: 46px;
+  min-height: 64px;
   width: 380px;
   overflow: hidden;
+  contain: layout paint; /* los cambios de canción no repintan el resto de la barra */
+}
+
+.apple-pill-main {
+  display: flex;
+  align-items: center;
+  height: 46px;
   padding-right: 14px;
 }
 
-.apple-pill img {
+.apple-pill-main img {
   width: 46px;
   height: 46px;
   object-fit: cover;
@@ -179,6 +249,57 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Barra de progreso */
+.barra-progreso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 18px;
+  padding: 0 12px;
+  font-size: 0.68rem;
+  color: #98989d;
+  font-variant-numeric: tabular-nums;
+}
+
+.barra-slider {
+  flex: 1;
+  height: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.barra-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    #1db954 var(--progreso, 0%),
+    rgba(255, 255, 255, 0.18) var(--progreso, 0%)
+  );
+}
+
+.barra-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.barra-slider:hover::-webkit-slider-thumb,
+.barra-slider:active::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+.barra-slider:disabled {
+  cursor: default;
 }
 
 /* Volumen */
@@ -244,7 +365,8 @@ body {
   color: #ffffff;
   font-size: 0.92rem;
   outline: none;
-  transition: all 0.2s ease;
+  user-select: text;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .search-bar:focus {
@@ -275,14 +397,30 @@ body {
   padding: 14px;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: background-color 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   position: relative;
+}
+
+/* La sombra del hover va en un pseudo-elemento que solo cambia de opacidad.
+   Animar box-shadow directamente obliga a repintar en cada fotograma. */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
 }
 
 .card:hover {
   background: rgba(255, 255, 255, 0.1);
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.card:hover::after {
+  opacity: 1;
 }
 
 .card-img-wrapper {
@@ -313,7 +451,7 @@ body {
   justify-content: center;
   opacity: 0;
   transform: translateY(8px);
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
@@ -337,4 +475,10 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }

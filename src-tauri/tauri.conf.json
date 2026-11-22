@@ -1,4 +1,5 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "swimly",
   "version": "0.1.0",
   "identifier": "com.alane.swimly",
@@ -12,8 +13,8 @@
     "windows": [
       {
         "title": "Swimly",
-        "width": 800,
-        "height": 600
+        "width": 1100,
+        "height": 720
       }
     ],
     "security": {
@@ -21,8 +22,10 @@
     }
   },
   "bundle": {
+    "resources": ["yt-dlp/**/*"],
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -33,7 +36,10 @@
   },
   "plugins": {
     "updater": {
-      "requireSignedVersion": true
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE3QTkwMDFCMTExMDIxOTUKUldTVklSQVJHd0NwcDA3clFUbCtDcjIyenZybDdLbHRwcjF1K0ZSbk1KMjI2NGk5akM1QkdoRWcK",
+      "endpoints": [
+        "https://github.com/OrioliAlan/Swimly1/releases/latest/download/latest.json"
+      ]
     }
   }
 }
