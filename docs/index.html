@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swimly: reproductor de música ligero para Windows</title>
+<meta name="description" content="Swimly es un reproductor de música de escritorio ligero: solo audio, mix de canciones similares y consumo mínimo.">
+<meta name="theme-color" content="#09090b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎵%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #09090b;
+  --panel: rgba(255, 255, 255, 0.05);
+  --borde: rgba(255, 255, 255, 0.09);
+  --texto: #f5f5f7;
+  --suave: #98989d;
+  --verde: #1db954;
+  --rojo: #fa2d48;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(circle at 20% 0%, rgba(29, 185, 84, 0.14), transparent 45%),
+              radial-gradient(circle at 85% 10%, rgba(250, 45, 72, 0.12), transparent 40%),
+              var(--bg);
+  color: var(--texto);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--verde); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+nav { display: flex; justify-content: space-between; align-items: center; padding: 24px 0; }
+.logo {
+  font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px;
+  background: linear-gradient(90deg, var(--verde), var(--rojo));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+nav a { color: var(--suave); font-size: 0.9rem; }
+
+.hero { text-align: center; padding: 64px 0 48px; }
+h1 { font-size: clamp(2rem, 6vw, 3.2rem); line-height: 1.15; letter-spacing: -1px; margin-bottom: 16px; }
+.hero p { color: var(--suave); font-size: 1.1rem; max-width: 540px; margin: 0 auto 32px; }
+.btn {
+  display: inline-block; background: var(--verde); color: #000; font-weight: 700;
+  padding: 14px 32px; border-radius: 999px; font-size: 1rem;
+  transition: transform 0.15s ease;
+}
+.btn:hover { transform: scale(1.04); text-decoration: none; }
+#meta { margin-top: 14px; color: var(--suave); font-size: 0.85rem; }
+
+h2 { font-size: 1.4rem; margin: 56px 0 20px; letter-spacing: -0.3px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 20px; }
+.card h3 { font-size: 1rem; margin-bottom: 6px; }
+.card h3::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--verde); margin-right: 10px;
+}
+.card p { color: var(--suave); font-size: 0.92rem; }
+
+details { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 16px 20px; margin-top: 56px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--suave); font-size: 0.92rem; margin-top: 10px; }
+
+#lista { display: grid; gap: 14px; }
+.nota { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 18px 20px; }
+.nota h3 { font-size: 1rem; }
+.nota time { color: var(--suave); font-size: 0.8rem; }
+.nota p { color: var(--suave); font-size: 0.92rem; margin-top: 8px; white-space: pre-wrap; }
+
+footer { margin: 64px 0 40px; padding-top: 24px; border-top: 1px solid var(--borde); color: var(--suave); font-size: 0.82rem; text-align: center; }
+footer a { margin: 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <span class="logo">Swimly</span>
+    <a href="https://github.com/AlanOri/Swimly1">Código en GitHub</a>
+  </nav>
+
+  <header class="hero">
+    <h1>Música por menos ram</h1>
+    <p>Reproductor de música ligero</p>
+    <a id="descargar" class="btn" href="https://github.com/AlanOri/Swimly1/releases/latest">Descargar para Windows</a>
+    <div id="meta">Windows 10 y 11 (64 bits)</div>
+  </header>
+
+  <main>
+    <h2>Qué hace Swimly</h2>
+    <div class="grid">
+      <div class="card"><h3>Solo audio</h3><p>Sin video de por medio: el consumo de CPU en reposo es casi nulo.</p></div>
+      <div class="card"><h3>Mix de canciones</h3><p>Eliges una canción y Swimly continúa con otras parecidas, sin repetirlas.</p></div>
+      <div class="card"><h3>Ligera</h3><p>Hecha con Tauri y Rust: ocupa poco espacio y poca memoria.</p></div>
+      <div class="card"><h3>Siempre al día</h3><p>Avisa cuando hay una versión nueva disponible.</p></div>
+    </div>
+
+    <details>
+      <summary>¿Windows muestra un aviso al instalar?</summary>
+      <p>Swimly todavía no cuenta con un certificado de firma de código de pago, así que SmartScreen puede mostrar el mensaje «Windows protegió su PC». Pulsa <strong>Más información</strong> y después <strong>Ejecutar de todos modos</strong>. El código fuente está público en GitHub para que puedas revisarlo.</p>
+    </details>
+
+    <h2>Novedades</h2>
+    <div id="lista">Cargando…</div>
+    <noscript><p><a href="https://github.com/AlanOri/Swimly1/releases">Ver todas las versiones en GitHub</a></p></noscript>
+  </main>
+
+  <footer>
+    <p>Proyecto personal. Swimly no está afiliado a YouTube ni a Google.</p>
+    <p style="margin-top:8px">
+      <a href="https://github.com/AlanOri/Swimly1">Código fuente</a>
+      <a href="https://github.com/AlanOri/Swimly1/releases">Todas las versiones</a>
+    </p>
+  </footer>
+</div>
+
+<script>
+const REPO = "AlanOri/Swimly1";
+const boton = document.getElementById("descargar");
+const meta = document.getElementById("meta");
+const lista = document.getElementById("lista");
+
+const fecha = (s) =>
+  new Date(s).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
+
+function tarjeta(r) {
+  const art = document.createElement("article");
+  art.className = "nota";
+  const h = document.createElement("h3");
+  h.textContent = (r.name || r.tag_name) + " ";
+  const t = document.createElement("time");
+  t.textContent = fecha(r.published_at);
+  h.append(t);
+  const p = document.createElement("p");
+  p.textContent = (r.body || "").trim() || "Sin notas.";
+  art.append(h, p);
+  return art;
+}
+
+// Una sola consulta: el botón usa la última release que tenga instalador
+// y la lista de novedades muestra las más recientes. Se rellenan solos al
+// publicar una release nueva, sin tocar esta página.
+fetch(`https://api.github.com/repos/${REPO}/releases?per_page=5`)
+  .then((r) => {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  })
+  .then((releases) => {
+    const ultima = releases.find((r) => r.assets.some((a) => a.name.endsWith("-setup.exe")));
+    if (ultima) {
+      const exe = ultima.assets.find((a) => a.name.endsWith("-setup.exe"));
+      boton.href = exe.browser_download_url;
+      meta.textContent = `${ultima.tag_name} · ${(exe.size / 1048576).toFixed(1)} MB · ${fecha(ultima.published_at)} · Windows 10 y 11 (64 bits)`;
+    }
+    lista.replaceChildren(...releases.map(tarjeta));
+  })
+  .catch(() => {
+    lista.textContent = "No se pudieron cargar las novedades. Puedes verlas en la página de versiones de GitHub.";
+  });
+</script>
+</body>
+</html>
