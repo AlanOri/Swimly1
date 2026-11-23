@@ -1,0 +1,330 @@
+.playlists-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+
+.playlists-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.lista-playlists {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.lista-playlists::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lista-playlists::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.playlist-nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-cuenta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.playlists-vacio {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 4px 12px;
+}
+
+.playlist-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  outline: none;
+  user-select: text;
+  transition: border-color 0.2s ease;
+}
+
+.playlist-input:focus {
+  border-color: #ffffff;
+}
+
+.pl-cabecera {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.pl-titulo {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.pl-input {
+  font-size: 1.2rem;
+  font-weight: 700;
+  min-width: 280px;
+}
+
+.pl-sub {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  margin-top: 4px;
+}
+
+.pl-acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-verde {
+  background: #ffffff;
+  color: #141518;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.btn-verde:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.btn-verde:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn-suave {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-suave:hover {
+  background: #2b2f36;
+  border-color: var(--border-strong);
+}
+
+.btn-peligro:hover {
+  background: rgba(250, 45, 72, 0.22);
+  border-color: rgba(250, 45, 72, 0.4);
+  color: #ff6b7d;
+}
+
+.lista-filas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fila {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+  transition: background-color 0.2s ease;
+}
+
+.fila:hover {
+  background: var(--bg-subtle);
+}
+
+.fila-activa {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fila-num {
+  width: 24px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fila img {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.fila-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.fila-titulo {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fila-artista {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fila-quitar {
+  opacity: 0;
+}
+
+.fila:hover .fila-quitar,
+.fila-quitar:focus-visible {
+  opacity: 1;
+}
+
+.card-add {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(20, 21, 24, 0.72);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.card:hover .card-add,
+.card-add:focus-visible {
+  opacity: 1;
+}
+
+.card-add:hover {
+  background: #ffffff;
+  color: #141518;
+}
+
+.pill-add {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.menu-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.menu-anadir {
+  position: fixed;
+  width: 240px;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.menu-titulo {
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.menu-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.menu-item span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.menu-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.menu-estado {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.menu-vacio {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}

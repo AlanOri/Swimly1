@@ -3,17 +3,33 @@ import type { FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import type { Cancion } from "./types.ts";
-import { limpiarArtista } from "./utils.ts";
-import BarraProgreso from "./components/BarraProgreso.tsx";
-import TarjetaCancion from "./components/TarjetaCancion.tsx";
+import type { Cancion } from "./types";
+import { limpiarArtista } from "./utils";
+import { cargar, guardar } from "./almacen";
+import { useRecientes } from "./hooks/useRecientes";
+import { usePlaylists } from "./hooks/usePlaylists.ts";
+import { useVolumenFade, FADE_PAUSA_MS } from "./hooks/useVolumenFade";
+import BarraProgreso from "./components/BarraProgreso";
+import TarjetaCancion from "./components/TarjetaCancion";
+import Inicio from "./components/inicio";
+import ListaPlaylists from "./components/ListaPlaylist.tsx";
+import VistaPlaylist from "./components/VistaPlaylist.tsx";
+import MenuAnadir from "./components/MenuAnadir.tsx";
+import ControlesVentana from "./components/controlesVentana";
+import MenuConfiguracion from "./components/menuConfiguracion";
+import type { DisenoApp } from "./components/menuConfiguracion";
 import "./App.css";
+import "./components/Playlist.css";
 
 type Resultado = "ok" | "error" | "cancelado";
 
-const TTL_URL = 4 * 60 * 60 * 1000; // las URLs de audio caducan en ~6 h
+const TTL_URL = 4 * 60 * 60 * 1000;
 const MAX_CACHE = 20;
-const MAX_INTENTOS = 3; // canciones que se prueban seguidas si alguna falla
+const MAX_INTENTOS = 3;
+const UMBRAL_RECIENTE_MS = 10_000;
+const MSG_LIMITE = "Llegaste al límite de playlists.";
+const CLAVE_DISENO = "swimly_diseno";
+const VERSION_DISENO = 1;
 
 function App() {
   const [busqueda, setBusqueda] = useState("");
@@ -24,20 +40,50 @@ function App() {
   const [siguienteVista, setSiguienteVista] = useState<Cancion | null>(null);
   const [reproduciendo, setReproduciendo] = useState(false);
   const [repetir, setRepetir] = useState(false);
-  const [volumen, setVolumen] = useState(80);
+  const [vistaPlaylistId, setVistaPlaylistId] = useState<string | null>(null);
+  const [menuAnadir, setMenuAnadir] = useState<{ cancion: Cancion; x: number; y: number } | null>(null);
+  const [diseno, setDiseno] = useState<DisenoApp>(() =>
+    cargar<DisenoApp>(CLAVE_DISENO, VERSION_DISENO, "arriba")
+  );
+  const [volumenAbierto, setVolumenAbierto] = useState(false);
+
+  const { recientes, agregar, limpiar } = useRecientes();
+  const { playlists, crear, renombrar, eliminar, anadir, quitar } = usePlaylists();
+
+  const playlistActiva = playlists.find((p) => p.id === vistaPlaylistId) ?? null;
 
   const audioRef = useRef<HTMLAudioElement>(null);
-  const peticion = useRef(0); // evita que una canción lenta pise a una más reciente
-  const sesionRef = useRef(0); // cambia cada vez que eliges una canción de los resultados
+  const volumenRef = useRef<HTMLDivElement>(null);
+  const { volumen, setVolumen, fadeIn, fadeOut, restaurarVolumen } = useVolumenFade(audioRef);
+
+  const peticion = useRef(0);
+  const sesionRef = useRef(0);
+  const modoRef = useRef<"mix" | "playlist">("mix");
   const actualRef = useRef<Cancion | null>(null);
-  const colaRef = useRef<Cancion[]>([]); // canciones por venir (similares)
-  const historialRef = useRef<Cancion[]>([]); // canciones ya reproducidas (para "Anterior")
-  const vistosRef = useRef<Set<string>>(new Set()); // reproducidas o en cola: evita repetir
+  const colaRef = useRef<Cancion[]>([]);
+  const historialRef = useRef<Cancion[]>([]); 
+  const vistosRef = useRef<Set<string>>(new Set()); 
   const mixEnVuelo = useRef<Promise<void> | null>(null);
   const urlCache = useRef(new Map<string, { url: string; ts: number }>());
   const urlEnVuelo = useRef(new Map<string, Promise<string>>());
+  const temporizadorReciente = useRef<number | undefined>(undefined);
 
-  // Comprueba actualizaciones en GitHub al abrir la ventana
+  const cambiarDiseno = (nuevo: DisenoApp) => {
+    setDiseno(nuevo);
+    guardar(CLAVE_DISENO, VERSION_DISENO, nuevo);
+  };
+
+  useEffect(() => {
+    if (!volumenAbierto) return;
+    const alClickFuera = (e: MouseEvent) => {
+      if (volumenRef.current && !volumenRef.current.contains(e.target as Node)) {
+        setVolumenAbierto(false);
+      }
+    };
+    document.addEventListener("mousedown", alClickFuera);
+    return () => document.removeEventListener("mousedown", alClickFuera);
+  }, [volumenAbierto]);
+
   useEffect(() => {
     const buscarActualizacion = async () => {
       try {
@@ -59,16 +105,11 @@ function App() {
     buscarActualizacion();
   }, []);
 
-  // El volumen y la repetición viven en el elemento <audio>
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volumen / 100;
-  }, [volumen]);
-
   useEffect(() => {
     if (audioRef.current) audioRef.current.loop = repetir;
   }, [repetir]);
 
-  /* ---------- Audio: URL con caché y precarga ---------- */
+  useEffect(() => () => window.clearTimeout(temporizadorReciente.current), []);
 
   const obtenerUrl = (id: string): Promise<string> => {
     const guardada = urlCache.current.get(id);
@@ -96,19 +137,17 @@ function App() {
     return p;
   };
 
-  /* ---------- Cola de canciones similares (Mix de YouTube) ---------- */
-
-  // Actualiza la vista previa "A continuación" con la cabeza de la cola
   const sincronizarVista = () => setSiguienteVista(colaRef.current[0] ?? null);
 
   const asegurarCola = (base: Cancion): Promise<void> => {
+    if (modoRef.current === "playlist") return Promise.resolve();
     if (colaRef.current.length > 0) return Promise.resolve();
     if (mixEnVuelo.current) return mixEnVuelo.current;
 
     const sesion = sesionRef.current;
     const p: Promise<void> = invoke<Cancion[]>("obtener_mix", { id: base.id })
       .then((mix) => {
-        if (sesion !== sesionRef.current) return; // el usuario ya cambió de sesión
+        if (sesion !== sesionRef.current) return;
         for (const c of mix) {
           if (!vistosRef.current.has(c.id)) {
             vistosRef.current.add(c.id);
@@ -126,41 +165,54 @@ function App() {
     return p;
   };
 
-  // Mientras suena una canción: prepara la cola y resuelve el audio de la siguiente
   const precargar = async (base: Cancion) => {
     await asegurarCola(base);
     const siguienteEnCola = colaRef.current[0];
     if (siguienteEnCola) obtenerUrl(siguienteEnCola.id).catch(() => {});
   };
 
-  /* ---------- Reproducción ---------- */
-
   const iniciar = async (cancion: Cancion): Promise<Resultado> => {
     const audio = audioRef.current;
     if (!audio) return "cancelado";
 
     const mia = ++peticion.current;
+    window.clearTimeout(temporizadorReciente.current);
     actualRef.current = cancion;
     setActual(cancion);
     setError("");
+
+    if (!audio.paused && audio.volume > 0.01) {
+      await fadeOut();
+      if (mia !== peticion.current) return "cancelado";
+    }
     audio.pause();
 
     try {
       const url = await obtenerUrl(cancion.id);
-      if (mia !== peticion.current) return "cancelado"; // el usuario ya eligió otra
+      if (mia !== peticion.current) return "cancelado";
       audio.src = url;
+      audio.volume = 0;
       await audio.play();
+
+      if (mia === peticion.current) {
+        fadeIn();
+        temporizadorReciente.current = window.setTimeout(
+          () => agregar(cancion),
+          UMBRAL_RECIENTE_MS
+        );
+      }
       return "ok";
     } catch (err) {
       if (mia !== peticion.current) return "cancelado";
+      restaurarVolumen();
       setError(String(err));
       return "error";
     }
   };
 
-  // Elegir una canción de los resultados: empieza una sesión nueva
   const seleccionarCancion = async (cancion: Cancion) => {
     sesionRef.current++;
+    modoRef.current = "mix";
     mixEnVuelo.current = null;
     colaRef.current = [];
     historialRef.current = [];
@@ -171,14 +223,33 @@ function App() {
     if (res === "ok") precargar(cancion);
   };
 
-  // Referencia siempre actualizada: permite pasar a las tarjetas una función
-  // estable y que React.memo evite repintarlas.
+  const reproducirLista = async (lista: Cancion[], indice: number) => {
+    const inicial = lista[indice];
+    if (!inicial) return;
+
+    sesionRef.current++;
+    modoRef.current = "playlist";
+    mixEnVuelo.current = null;
+    colaRef.current = lista.slice(indice + 1);
+    historialRef.current = lista.slice(0, indice);
+    vistosRef.current = new Set(lista.map((c) => c.id));
+    sincronizarVista();
+
+    const res = await iniciar(inicial);
+    if (res === "ok") precargar(inicial);
+  };
+
   const seleccionarRef = useRef(seleccionarCancion);
+  const reproducirListaRef = useRef(reproducirLista);
   useEffect(() => {
     seleccionarRef.current = seleccionarCancion;
+    reproducirListaRef.current = reproducirLista;
   });
   const onSeleccionar = useCallback((c: Cancion) => {
     seleccionarRef.current(c);
+  }, []);
+  const onReproducirLista = useCallback((lista: Cancion[], indice: number) => {
+    reproducirListaRef.current(lista, indice);
   }, []);
 
   const tomarSiguiente = (): Cancion | undefined => {
@@ -188,7 +259,8 @@ function App() {
       return deCola;
     }
 
-    // Respaldo: si el mix falló, seguir con los resultados de la búsqueda
+    if (modoRef.current === "playlist") return undefined;
+
     const deResultados = canciones.find((c) => !vistosRef.current.has(c.id));
     if (deResultados) vistosRef.current.add(deResultados.id);
     return deResultados;
@@ -202,7 +274,7 @@ function App() {
       await asegurarCola(origen);
       const proxima = tomarSiguiente();
       if (!proxima) {
-        setError("No se encontraron más canciones similares.");
+        if (modoRef.current === "mix") setError("No se encontraron más canciones similares.");
         return;
       }
 
@@ -213,7 +285,6 @@ function App() {
         return;
       }
       if (res === "cancelado") return;
-      // res === "error": se prueba con la siguiente de la cola
     }
   };
 
@@ -222,33 +293,50 @@ function App() {
     const base = actualRef.current;
     if (!audio || !base) return;
 
-    // Pasados 3 segundos, "Anterior" reinicia la canción actual
     if (audio.currentTime > 3 || historialRef.current.length === 0) {
       audio.currentTime = 0;
       return;
     }
 
     const previa = historialRef.current.pop()!;
-    colaRef.current.unshift(base); // "Siguiente" vuelve a la que estaba sonando
+    colaRef.current.unshift(base);
     sincronizarVista();
     const res = await iniciar(previa);
     if (res === "ok") precargar(previa);
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio || !actual) return;
     if (audio.paused) {
-      audio.play().catch((err) => setError(String(err)));
+      audio.volume = 0;
+      audio
+        .play()
+        .then(() => fadeIn(FADE_PAUSA_MS))
+        .catch((err) => setError(String(err)));
     } else {
+      await fadeOut(FADE_PAUSA_MS);
       audio.pause();
+      restaurarVolumen();
     }
+  };
+
+  const abrirMenu = useCallback((cancion: Cancion, x: number, y: number) => {
+    setMenuAnadir({ cancion, x, y });
+  }, []);
+  const cerrarMenu = useCallback(() => setMenuAnadir(null), []);
+
+  const crearDesdeLista = (nombre: string) => {
+    const id = crear(nombre);
+    if (id) setVistaPlaylistId(id);
+    else setError(MSG_LIMITE);
   };
 
   const ejecutarBusqueda = async (e: FormEvent) => {
     e.preventDefault();
     if (!busqueda.trim()) return;
 
+    setVistaPlaylistId(null);
     setCargando(true);
     setError("");
     try {
@@ -267,16 +355,33 @@ function App() {
     }
   };
 
-  return (
-    <div className="app-container">
-      {/* Barra lateral minimalista */}
-      <aside className="sidebar">
-        <div className="logo">Swimly</div>
+  const buscadorJSX = (
+    <form onSubmit={ejecutarBusqueda} className="search-container">
+      <div className="search-input-wrapper">
+        <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+        </svg>
+        <input
+          type="text"
+          className="search-bar"
+          placeholder="Buscar artistas, canciones o álbumes..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      </div>
+    </form>
+  );
 
-        <div className="sidebar-section">Menú</div>
+  return (
+    <div className={`app-container ${diseno === "abajo" ? "layout-abajo" : "layout-arriba"}`}>
+      <aside className="sidebar">
+        <div className="logo" data-tauri-drag-region>Swimly</div>
+
+        <div className="sidebar-section" data-tauri-drag-region>Menú</div>
         <div
-          className="nav-item active"
+          className={`nav-item ${playlistActiva ? "" : "active"}`}
           onClick={() => {
+            setVistaPlaylistId(null);
             setCanciones([]);
             setBusqueda("");
             setError("");
@@ -288,7 +393,13 @@ function App() {
           Inicio
         </div>
 
-        {/* Vista previa de la siguiente canción */}
+        <ListaPlaylists
+          playlists={playlists}
+          activaId={playlistActiva?.id ?? null}
+          onAbrir={setVistaPlaylistId}
+          onCrear={crearDesdeLista}
+        />
+
         {siguienteVista && (
           <div className="proxima-wrap">
             <div className="sidebar-section">A continuación</div>
@@ -309,9 +420,21 @@ function App() {
         )}
       </aside>
 
-      {/* Barra superior estilo Apple Music */}
-      <header className="topbar">
-        <div className="transport-controls">
+      <div className="window-topbar" data-tauri-drag-region>
+        <div className="window-topbar-left" data-tauri-drag-region>
+          {diseno === "abajo" && buscadorJSX}
+        </div>
+        <div className="window-topbar-right" data-tauri-drag-region>
+          <MenuConfiguracion diseno={diseno} onCambiarDiseno={cambiarDiseno} />
+          <ControlesVentana />
+        </div>
+      </div>
+
+      <header className="topbar" data-tauri-drag-region={diseno === "arriba" ? true : undefined}>
+        <div
+          className="transport-controls"
+          data-tauri-drag-region={diseno === "arriba" ? true : undefined}
+        >
           <button className="icon-btn" onClick={anterior} title="Anterior">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
@@ -352,7 +475,6 @@ function App() {
           </button>
         </div>
 
-        {/* Cápsula central de reproducción con barra de progreso */}
         <div className="apple-pill">
           {actual ? (
             <>
@@ -367,6 +489,18 @@ function App() {
                   <div className="apple-pill-title">{actual.titulo}</div>
                   <div className="apple-pill-artist">{limpiarArtista(actual.artista)}</div>
                 </div>
+                <button
+                  className="icon-btn pill-add"
+                  title="Añadir a playlist"
+                  onClick={(e) => {
+                    const caja = e.currentTarget.getBoundingClientRect();
+                    abrirMenu(actual, caja.right, caja.bottom);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                  </svg>
+                </button>
               </div>
               <BarraProgreso audioRef={audioRef} />
             </>
@@ -379,47 +513,63 @@ function App() {
           )}
         </div>
 
-        <div className="right-tools">
-          <div className="volume-box">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              {volumen === 0 ? (
-                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-              ) : (
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-              )}
-            </svg>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={volumen}
-              onChange={(e) => setVolumen(Number(e.target.value))}
-              className="volume-slider"
-            />
+        <div
+          className="right-tools"
+          data-tauri-drag-region={diseno === "arriba" ? true : undefined}
+        >
+          <div
+            ref={volumenRef}
+            className={`volume-box ${volumenAbierto ? "abierto" : ""}`}
+          >
+            <button
+              type="button"
+              className="volume-toggle-btn"
+              onClick={() => setVolumenAbierto((v) => !v)}
+              title={`Volumen: ${volumen}%`}
+              aria-label="Control de volumen"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                {volumen === 0 ? (
+                  <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                ) : (
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                )}
+              </svg>
+            </button>
+
+            <div className="volume-popover">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={volumen}
+                onChange={(e) => setVolumen(Number(e.target.value))}
+                className="volume-slider"
+              />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Vista principal despejada */}
       <main className="main-view">
-        <form onSubmit={ejecutarBusqueda} className="search-container">
-          <div className="search-input-wrapper">
-            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
-            </svg>
-            <input
-              type="text"
-              className="search-bar"
-              placeholder="Buscar artistas, canciones o álbumes..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
-          </div>
-        </form>
+        {diseno === "arriba" && buscadorJSX}
 
         {error && <p style={{ color: "#fa2d48", marginBottom: "16px" }}>{error}</p>}
 
-        {cargando ? (
+        {playlistActiva ? (
+          <VistaPlaylist
+            key={playlistActiva.id}
+            playlist={playlistActiva}
+            actualId={actual?.id ?? null}
+            onReproducir={onReproducirLista}
+            onQuitar={quitar}
+            onRenombrar={renombrar}
+            onEliminar={(id) => {
+              eliminar(id);
+              setVistaPlaylistId(null);
+            }}
+          />
+        ) : cargando ? (
           <p style={{ color: "#8e8e93", fontSize: "0.95rem" }}>Buscando...</p>
         ) : canciones.length > 0 ? (
           <>
@@ -428,18 +578,38 @@ function App() {
             </h2>
             <div className="grid-canciones">
               {canciones.map((c) => (
-                <TarjetaCancion key={c.id} cancion={c} onSeleccionar={onSeleccionar} />
+                <TarjetaCancion key={c.id} cancion={c} onSeleccionar={onSeleccionar} onAnadir={abrirMenu} />
               ))}
             </div>
           </>
         ) : (
-          <div className="empty-state">
-            <p>Escribe arriba el nombre de una canción o artista para comenzar.</p>
-          </div>
+          <Inicio
+            recientes={recientes}
+            onSeleccionar={onSeleccionar}
+            onAnadir={abrirMenu}
+            onLimpiar={limpiar}
+          />
         )}
       </main>
 
-      {/* Reproductor solo audio: sin video, sin iframe */}
+      {menuAnadir && (
+        <MenuAnadir
+          cancion={menuAnadir.cancion}
+          x={menuAnadir.x}
+          y={menuAnadir.y}
+          playlists={playlists}
+          onAnadir={(id) => {
+            anadir(id, menuAnadir.cancion);
+            cerrarMenu();
+          }}
+          onCrear={(nombre) => {
+            if (!crear(nombre, menuAnadir.cancion)) setError(MSG_LIMITE);
+            cerrarMenu();
+          }}
+          onCerrar={cerrarMenu}
+        />
+      )}
+
       <audio
         ref={audioRef}
         onPlay={() => setReproduciendo(true)}

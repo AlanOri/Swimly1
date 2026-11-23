@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "swimly",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "com.alane.swimly",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,7 +14,11 @@
       {
         "title": "Swimly",
         "width": 1100,
-        "height": 720
+        "height": 750,
+        "minWidth": 820,
+        "minHeight": 560,
+        "decorations": false,
+        "theme": "Dark"
       }
     ],
     "security": {

@@ -6,10 +6,6 @@ interface Props {
   audioRef: RefObject<HTMLAudioElement | null>;
 }
 
-/**
- * Tiene su propio estado: al actualizarse cada segundo solo se repinta este
- * componente, no las tarjetas ni el resto de la interfaz.
- */
 export default function BarraProgreso({ audioRef }: Props) {
   const [tiempo, setTiempo] = useState(0);
   const [duracion, setDuracion] = useState(0);
@@ -20,9 +16,9 @@ export default function BarraProgreso({ audioRef }: Props) {
     if (!audio) return;
 
     const sincronizar = () => {
-      // Con la ventana minimizada u oculta no se gasta CPU en la interfaz
+      
       if (document.hidden) return;
-      // Segundos enteros: si el valor no cambia, React no repinta
+      
       setTiempo(Math.floor(audio.currentTime));
       setDuracion(Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0);
     };
@@ -38,7 +34,6 @@ export default function BarraProgreso({ audioRef }: Props) {
     };
   }, [audioRef]);
 
-  // El audio solo se mueve al soltar, para no pedir datos en cada píxel del arrastre
   const confirmar = () => {
     const audio = audioRef.current;
     if (audio && arrastre !== null) {
